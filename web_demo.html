@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Hotel Concierge Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial; background: #1a1a2e; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .chat-container { width: 400px; max-width: 100%; height: 600px; background: white; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+        .header { background: #c9a03d; color: white; padding: 20px; text-align: center; }
+        .header h1 { font-size: 20px; }
+        .header p { font-size: 12px; opacity: 0.9; }
+        .messages { flex: 1; padding: 15px; overflow-y: auto; background: #f5f5f5; }
+        .message { margin-bottom: 12px; display: flex; }
+        .message.user { justify-content: flex-end; }
+        .message.bot { justify-content: flex-start; }
+        .bubble { max-width: 80%; padding: 10px 14px; border-radius: 18px; font-size: 14px; }
+        .user .bubble { background: #c9a03d; color: white; border-radius: 18px 18px 4px 18px; }
+        .bot .bubble { background: white; color: #333; border-radius: 18px 18px 18px 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .input-area { display: flex; padding: 15px; background: white; border-top: 1px solid #ddd; gap: 10px; }
+        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 25px; outline: none; }
+        button { background: #c9a03d; color: white; border: none; padding: 12px 20px; border-radius: 25px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #b88a2a; }
+        .typing { font-size: 12px; color: #999; padding: 5px 15px; }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="header">
+            <h1>🏨 Royal Luxury Hotel</h1>
+            <p>AI Concierge • 24/7</p>
+        </div>
+        <div class="messages" id="messages">
+            <div class="message bot">
+                <div class="bubble">Good evening Sir/Madam! Welcome to Royal Luxury Hotel. How may I assist you today? 🇬🇭</div>
+            </div>
+        </div>
+        <div class="typing" id="typing" style="display:none;">🤖 AI is typing...</div>
+        <div class="input-area">
+            <input type="text" id="input" placeholder="Ask me anything..." onkeypress="if(event.key==='Enter') send()">
+            <button onclick="send()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const messagesDiv = document.getElementById('messages');
+        const typingDiv = document.getElementById('typing');
+        const input = document.getElementById('input');
+
+        async function send() {
+            const message = input.value.trim();
+            if (!message) return;
+            
+            // Add user message
+            addMessage(message, 'user');
+            input.value = '';
+            
+            // Show typing indicator
+            typingDiv.style.display = 'block';
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            try {
+                const response = await fetch('http://localhost:8000/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: message,
+                        phone_number: '233201234567',
+                        hotel_phone: '233123456789'
+                    })
+                });
+                const data = await response.json();
+                typingDiv.style.display = 'none';
+                addMessage(data.response, 'bot');
+            } catch (error) {
+                typingDiv.style.display = 'none';
+                addMessage('I apologize Sir/Madam. Please call the front desk at extension 0.', 'bot');
+            }
+        }
+        
+        function addMessage(text, sender) {
+            const div = document.createElement('div');
+            div.className = `message ${sender}`;
+            div.innerHTML = `<div class="bubble">${text}</div>`;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html>

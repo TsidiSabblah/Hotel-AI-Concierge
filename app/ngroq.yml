@@ -1,0 +1,7 @@
+version: "2"
+authtoken: YOUR_AUTH_TOKEN_HERE
+tunnels:
+  concierge:
+    proto: http
+    addr: 8000
+    inspect: false
