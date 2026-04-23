@@ -7,3 +7,4 @@ aiosqlite==0.19.0
 groq==0.4.2
 python-dotenv==1.0.0
 httpx==0.25.1
+psycopg2-binary==2.9.9
