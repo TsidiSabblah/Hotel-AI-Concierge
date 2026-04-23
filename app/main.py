@@ -33,7 +33,7 @@ app = FastAPI(
 )
 
 # Setup admin panel
-setup_admin(app)
+setup_admin(app)   
 
 app.add_middleware(
     CORSMiddleware,
