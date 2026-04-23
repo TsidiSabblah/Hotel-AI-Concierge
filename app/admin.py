@@ -1,7 +1,31 @@
-from sqladmin import Admin, ModelView
+from sqladmin import Admin, ModelView, authentication
+from sqladmin.authentication import AuthenticationBackend
+from starlette.requests import Request
 from app.db import (
     Hotel, Guest, Conversation, Message, HotelKnowledge, engine
 )
+import os
+
+# --- Authentication Backend ---
+class AdminAuth(AuthenticationBackend):
+    async def login(self, request: Request) -> bool:
+        form = await request.form()
+        username = form.get('username')
+        password = form.get('password')
+        # Get credentials from environment variables
+        admin_user = os.getenv("ADMIN_USERNAME", "admin")
+        admin_pass = os.getenv("ADMIN_PASSWORD", "admin123")
+        if username == admin_user and password == admin_pass:
+            request.session.update({"is_admin": True})
+            return True
+        return False
+
+    async def logout(self, request: Request) -> bool:
+        request.session.clear()
+        return True
+
+    async def authenticate(self, request: Request) -> bool:
+        return request.session.get("is_admin", False)
 
 # --- Model Views ---
 class HotelAdmin(ModelView, model=Hotel):
@@ -29,7 +53,16 @@ class HotelKnowledgeAdmin(ModelView, model=HotelKnowledge):
 
 # --- Function to attach admin to a FastAPI app ---
 def setup_admin(app):
-    admin = Admin(app, engine, title="Hotel AI Concierge Admin")
+    # Secret key for session (from env, fallback for local dev)
+    secret_key = os.getenv("ADMIN_SECRET_KEY", "your-super-secret-key-change-in-production")
+    authentication_backend = AdminAuth(secret_key=secret_key)
+    
+    admin = Admin(
+        app,
+        engine,
+        title="Hotel AI Concierge Admin",
+        authentication_backend=authentication_backend
+    )
     admin.add_view(HotelAdmin)
     admin.add_view(GuestAdmin)
     admin.add_view(ConversationAdmin)
