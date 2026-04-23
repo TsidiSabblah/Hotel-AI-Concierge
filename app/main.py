@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
-
+from app.admin import setup_admin
 from app.db import init_db, get_hotel_by_phone, get_or_create_guest
 from app.config import settings
 from agents.hotel_agent import HotelAgent
@@ -31,6 +31,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Setup admin panel
+setup_admin(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -213,3 +216,5 @@ async def verify_webhook(
     if hub_mode == "subscribe" and hub_verify_token == "test_verify_token":
         return Response(content=str(hub_challenge), media_type="text/plain")
     return {"error": "Verification failed"}
+# Setup admin panel
+setup_admin(app)
