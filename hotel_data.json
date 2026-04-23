@@ -1,0 +1,65 @@
+{
+  "hotel_name": "Royal Serenity Hotel Accra",
+  "city": "Accra, Ghana",
+  "address": "123 Independence Avenue, Opposite Accra Mall",
+  "phone": "+233 30 212 3456",
+  "check_in": "2:00 PM",
+  "check_out": "12:00 PM",
+  "breakfast": {
+    "hours": "6:30 AM - 10:30 AM",
+    "location": "Palm Court Restaurant, Ground Floor",
+    "price": "GHS 85 per person (included in premium rooms)"
+  },
+  "wifi": {
+    "ssid": "RoyalSerenity_Guest",
+    "password": "Accra2025!",
+    "notes": "Password changes monthly; ask front desk for new code"
+  },
+  "pool": {
+    "hours": "7:00 AM - 9:00 PM",
+    "location": "Rooftop, 5th Floor",
+    "notes": "Towels provided at pool bar"
+  },
+  "gym": {
+    "hours": "24/7",
+    "location": "Basement level, use room key for access"
+  },
+  "spa": {
+    "name": "Serenity Spa",
+    "hours": "9:00 AM - 8:00 PM",
+    "booking": "Call extension 123 or visit spa desk",
+    "price_range": "GHS 150 - 450"
+  },
+  "restaurant": {
+    "name": "Palm Court Restaurant",
+    "hours": "12:00 PM - 10:30 PM (last order 10:00 PM)",
+    "cuisine": "Local Ghanaian and international",
+    "reservation": "Recommended for dinner, call extension 101"
+  },
+  "local_recommendations": [
+    {
+      "name": "Buka Restaurant",
+      "distance": "0.5 km",
+      "cuisine": "Authentic Ghanaian",
+      "price": "GHS 50-120"
+    },
+    {
+      "name": "Accra Mall",
+      "distance": "1 km",
+      "type": "Shopping",
+      "notes": "Open 9 AM - 9 PM"
+    },
+    {
+      "name": "Kwame Nkrumah Mausoleum",
+      "distance": "5 km",
+      "type": "Tourist attraction",
+      "entry": "GHS 20 for adults"
+    }
+  ],
+  "policies": {
+    "cancellation": "Free cancellation up to 24 hours before check-in",
+    "children": "Children under 12 stay free (sharing with parents)",
+    "pets": "Not allowed (service animals excepted)",
+    "parking": "Free secure parking available"
+  }
+}
