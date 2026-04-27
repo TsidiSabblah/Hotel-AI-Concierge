@@ -227,47 +227,53 @@ async def whatsapp_webhook(request: Request):
         body = await request.json()
         print(f"Incoming webhook: {body}")
 
-        # Extract sender and message text (360dialog format may differ)
-        # Typical 360dialog incoming webhook payload:
-        # {"messages": [{"from": "123456789", "text": {"body": "Hi"}}]}
+        # Extract message from 360dialog format
         messages = body.get("messages", [])
+        if not messages:
+            # Try alternative format (Meta Cloud API)
+            entry = body.get("entry", [])
+            if entry:
+                changes = entry[0].get("changes", [])
+                if changes:
+                    value = changes[0].get("value", {})
+                    messages = value.get("messages", [])
+
         if not messages:
             return {"status": "ok"}
 
         msg = messages[0]
         sender = msg.get("from")
         text = msg.get("text", {}).get("body", "")
-
-        if not text:
+        if not sender or not text:
             return {"status": "ok"}
 
-        # Call your AI agent to get a reply
+        # Call AI agent
         hotel_context = {"name": "Test Hotel", "city": "Accra"}
         result = await hotel_agent.process_message(
             message=text,
             hotel_context=hotel_context,
-            guest_name=sender or "Guest"
+            guest_name=sender
         )
         reply_text = result.get("response", "How may I assist you?")
 
-# Send reply via 360dialog API
-async with httpx.AsyncClient() as client:
-    resp = await client.post(
-        "https://waba-sandbox.360dialog.io/v1/messages",
-        headers={
-            "D360-API-KEY": settings.DIALOG_API_KEY,
-            "Content-Type": "application/json"
-        },
-        json={
-            "messaging_product": "whatsapp",   # <-- REQUIRED
-            "recipient_type": "individual",
-            "to": sender,
-            "type": "text",
-            "text": {"body": reply_text}
-        }
-    )
-    if resp.status_code != 201:
-        print(f"Failed to send message: {resp.text}")
+        # Send reply via 360dialog API
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://waba-sandbox.360dialog.io/v1/messages",
+                headers={
+                    "D360-API-KEY": settings.DIALOG_API_KEY,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": sender,
+                    "type": "text",
+                    "text": {"body": reply_text}
+                }
+            )
+            if resp.status_code != 201:
+                print(f"Failed to send message: {resp.text}")
 
         return {"status": "ok"}
 
