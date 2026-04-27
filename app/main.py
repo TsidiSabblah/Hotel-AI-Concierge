@@ -218,7 +218,8 @@ async def whatsapp_webhook(request: Request):
 
     except Exception as e:
         print(f"Webhook error: {e}")
-        return {"status": "error"}import httpx
+        return {"status": "error"}
+import httpx
 from app.config import settings
 
 @app.post("/webhook/whatsapp")
