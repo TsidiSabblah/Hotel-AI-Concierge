@@ -164,57 +164,112 @@ async def debug_ai():
             "error_type": type(e).__name__,
             "traceback": traceback.format_exc()
         }
+import httpx
+from app.config import settings
+
 @app.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):
-    """Receive messages from WhatsApp mock server"""
     try:
         body = await request.json()
-        print(f"📨 WhatsApp webhook received: {body}")
-        
-        # Extract message from the mock server format
-        message_text = None
-        sender = None
-        
-        # The mock server might send different formats
-        if "message" in body:
-            message_text = body.get("message", {}).get("text", "")
-            sender = body.get("from", "")
-        elif "text" in body:
-            message_text = body.get("text", "")
-            sender = body.get("from", "")
-        elif "body" in body:
-            message_text = body.get("body", "")
-            sender = body.get("sender", "")
-        
-        if message_text:
-            # Use your existing hotel agent
-            hotel_context = {"name": "Test Hotel", "city": "Accra"}
-            result = await hotel_agent.process_message(
-                message=message_text,
-                hotel_context=hotel_context,
-                guest_name=sender or "Guest"
+        print(f"Incoming webhook: {body}")
+
+        # Extract sender and message text (360dialog format may differ)
+        # Typical 360dialog incoming webhook payload:
+        # {"messages": [{"from": "123456789", "text": {"body": "Hi"}}]}
+        messages = body.get("messages", [])
+        if not messages:
+            return {"status": "ok"}
+
+        msg = messages[0]
+        sender = msg.get("from")
+        text = msg.get("text", {}).get("body", "")
+
+        if not text:
+            return {"status": "ok"}
+
+        # Call your AI agent to get a reply
+        hotel_context = {"name": "Test Hotel", "city": "Accra"}
+        result = await hotel_agent.process_message(
+            message=text,
+            hotel_context=hotel_context,
+            guest_name=sender or "Guest"
+        )
+        reply_text = result.get("response", "How may I assist you?")
+
+        # Send reply via 360dialog API
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://waba-sandbox.360dialog.io/v1/messages",
+                headers={
+                    "D360-API-KEY": settings.DIALOG_API_KEY,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "recipient_type": "individual",
+                    "to": sender,
+                    "type": "text",
+                    "text": {"body": reply_text}
+                }
             )
-            
-            response_text = result.get("response", "How may I assist you?")
-            print(f"🤖 AI response: {response_text}")
-            
-            # Return in format mock server expects
-            return {"reply": response_text}
-        
-        return {"status": "ok", "message": "No text message found"}
-        
+            if resp.status_code != 201:
+                print(f"Failed to send message: {resp.text}")
+
+        return {"status": "ok"}
+
     except Exception as e:
-        print(f"❌ Webhook error: {e}")
-        return {"status": "error", "message": str(e)}
-@app.get("/webhook/whatsapp")
-async def verify_webhook(
-    hub_mode: str = None,
-    hub_verify_token: str = None,
-    hub_challenge: int = None
-):
-    """WhatsApp webhook verification"""
-    if hub_mode == "subscribe" and hub_verify_token == "test_verify_token":
-        return Response(content=str(hub_challenge), media_type="text/plain")
-    return {"error": "Verification failed"}
-# Setup admin panel
-setup_admin(app)
+        print(f"Webhook error: {e}")
+        return {"status": "error"}import httpx
+from app.config import settings
+
+@app.post("/webhook/whatsapp")
+async def whatsapp_webhook(request: Request):
+    try:
+        body = await request.json()
+        print(f"Incoming webhook: {body}")
+
+        # Extract sender and message text (360dialog format may differ)
+        # Typical 360dialog incoming webhook payload:
+        # {"messages": [{"from": "123456789", "text": {"body": "Hi"}}]}
+        messages = body.get("messages", [])
+        if not messages:
+            return {"status": "ok"}
+
+        msg = messages[0]
+        sender = msg.get("from")
+        text = msg.get("text", {}).get("body", "")
+
+        if not text:
+            return {"status": "ok"}
+
+        # Call your AI agent to get a reply
+        hotel_context = {"name": "Test Hotel", "city": "Accra"}
+        result = await hotel_agent.process_message(
+            message=text,
+            hotel_context=hotel_context,
+            guest_name=sender or "Guest"
+        )
+        reply_text = result.get("response", "How may I assist you?")
+
+        # Send reply via 360dialog API
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://waba-sandbox.360dialog.io/v1/messages",
+                headers={
+                    "D360-API-KEY": settings.DIALOG_API_KEY,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "recipient_type": "individual",
+                    "to": sender,
+                    "type": "text",
+                    "text": {"body": reply_text}
+                }
+            )
+            if resp.status_code != 201:
+                print(f"Failed to send message: {resp.text}")
+
+        return {"status": "ok"}
+
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return {"status": "error"}

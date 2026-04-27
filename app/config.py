@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     HUBTEL_CLIENT_SECRET: Optional[str] = None
     HOTELRUNNER_API_KEY: Optional[str] = None
     HOTELRUNNER_PROPERTY_ID: Optional[int] = None
+DIALOG_API_KEY: Optional[str] = os.getenv("DIALOG_API_KEY")
 
     class Config:
         env_file = ".env"
