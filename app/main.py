@@ -225,54 +225,60 @@ async def whatsapp_webhook(request: Request):
 async def whatsapp_webhook(request: Request):
     try:
         body = await request.json()
-        print(f"Full webhook payload: {body}")
+        print("📨 Full webhook payload received")
 
-        # Extract message from 360dialog format
-        # They send: {"messages": [{"from": "...", "text": {"body": "hello"}}]}
-        # Also handle Meta Cloud API format as fallback.
-        messages = body.get("messages", [])
-        if not messages and "entry" in body:
-            # Meta Cloud API format
-            for entry in body.get("entry", []):
-                for change in entry.get("changes", []):
+        # --- Extract message from Meta Cloud API format (used by 360dialog) ---
+        messages = []
+        # Direct 'messages' field
+        if "messages" in body:
+            messages = body["messages"]
+        else:
+            # Drill down into entry[0].changes[0].value.messages
+            entries = body.get("entry", [])
+            for entry in entries:
+                changes = entry.get("changes", [])
+                for change in changes:
                     value = change.get("value", {})
-                    messages = value.get("messages", [])
-                    if messages:
+                    if "messages" in value:
+                        messages = value["messages"]
                         break
                 if messages:
                     break
 
         if not messages:
-            print("No messages found in payload")
+            print("⚠️ No messages found in payload")
             return {"status": "ok"}
 
         msg = messages[0]
         sender = msg.get("from")
         text = msg.get("text", {}).get("body", "")
+
         if not sender or not text:
-            print(f"Missing sender or text: sender={sender}, text={text}")
+            print(f"⚠️ Missing sender or text: sender={sender}, text={text}")
             return {"status": "ok"}
 
-        print(f"Processing message from {sender}: {text}")
+        print(f"✅ Processing message from {sender}: '{text}'")
 
-        # Call AI agent
+        # --- Call your AI agent ---
         hotel_context = {"name": "Test Hotel", "city": "Accra"}
         result = await hotel_agent.process_message(
             message=text,
             hotel_context=hotel_context,
             guest_name=sender
         )
-        reply_text = result.get("response", "How may I assist you?")
-        print(f"AI reply: {reply_text}")
+        reply_text = result.get("response", "I'm sorry, I didn't understand that.")
+        print(f"🤖 AI reply: {reply_text}")
 
-        # Send reply via 360dialog API (or Meta Cloud API)
+        # --- Send reply via 360dialog API ---
         api_key = settings.DIALOG_API_KEY
         if not api_key:
-            print("DIALOG_API_KEY is not set in environment")
+            print("❌ DIALOG_API_KEY is not set in environment variables")
             return {"status": "error", "detail": "Missing API key"}
 
+        print(f"🔑 Using API key: {api_key[:10]}...")
+
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
+            response = await client.post(
                 "https://waba-sandbox.360dialog.io/v1/messages",
                 headers={
                     "D360-API-KEY": api_key,
@@ -286,13 +292,13 @@ async def whatsapp_webhook(request: Request):
                     "text": {"body": reply_text}
                 }
             )
-            if resp.status_code == 201:
-                print("Reply sent successfully")
+            if response.status_code == 201:
+                print("✅ Reply sent successfully")
             else:
-                print(f"Failed to send reply: {resp.status_code} - {resp.text}")
+                print(f"❌ Failed to send reply: {response.status_code} - {response.text}")
 
         return {"status": "ok"}
 
     except Exception as e:
-        print(f"Webhook error: {e}")
+        print(f"🔥 Webhook error: {e}")
         return {"status": "error", "detail": str(e)}
