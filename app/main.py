@@ -225,77 +225,35 @@ async def whatsapp_webhook(request: Request):
 async def whatsapp_webhook(request: Request):
     try:
         body = await request.json()
-        print(f"Full webhook body: {body}")
+        print(f"Full webhook payload: {body}")
 
-        # Extract sender and message (360dialog format)
-        sender = None
-        message_text = None
-
-        # Try 360dialog format
+        # Extract message from 360dialog format
+        # They send: {"messages": [{"from": "...", "text": {"body": "hello"}}]}
+        # Also handle Meta Cloud API format as fallback.
         messages = body.get("messages", [])
-        if messages:
-            sender = messages[0].get("from")
-            message_text = messages[0].get("text", {}).get("body")
+        if not messages and "entry" in body:
+            # Meta Cloud API format
+            for entry in body.get("entry", []):
+                for change in entry.get("changes", []):
+                    value = change.get("value", {})
+                    messages = value.get("messages", [])
+                    if messages:
+                        break
+                if messages:
+                    break
 
-        # If not found, try Meta Cloud API format
-        if not sender:
-            entry = body.get("entry", [])
-            if entry:
-                changes = entry[0].get("changes", [])
-                if changes:
-                    value = changes[0].get("value", {})
-                    msgs = value.get("messages", [])
-                    if msgs:
-                        sender = msgs[0].get("from")
-                        message_text = msgs[0].get("text", {}).get("body")
-
-        if not sender or not message_text:
-            print(f"Could not extract sender/message from: {body}")
+        if not messages:
+            print("No messages found in payload")
             return {"status": "ok"}
 
-        print(f"Sender: {sender}, Message: {message_text}")
-
-        # Call AI agent
-        hotel_context = {"name": "Test Hotel", "city": "Accra"}
-        result = await hotel_agent.process_message(
-            message=message_text,
-            hotel_context=hotel_context,
-            guest_name=sender
-        )
-        reply_text = result.get("response", "How may I assist you?")
-        print(f"AI Reply: {reply_text}")
-
-        # Send reply via 360dialog API
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://waba-sandbox.360dialog.io/v1/messages",
-                headers={
-                    "D360-API-KEY": settings.DIALOG_API_KEY,
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "messaging_product": "whatsapp",
-                    "recipient_type": "individual",
-                    "to": sender,
-                    "type": "text",
-                    "text": {"body": reply_text}
-                }
-            )
-            if resp.status_code != 201:
-                print(f"Failed to send: {resp.text}")
-            else:
-                print(f"Reply sent to {sender}")
-
-        return {"status": "ok"}
-
-    except Exception as e:
-        print(f"Webhook error: {e}")
-        return {"status": "error"}
         msg = messages[0]
         sender = msg.get("from")
         text = msg.get("text", {}).get("body", "")
         if not sender or not text:
+            print(f"Missing sender or text: sender={sender}, text={text}")
             return {"status": "ok"}
+
+        print(f"Processing message from {sender}: {text}")
 
         # Call AI agent
         hotel_context = {"name": "Test Hotel", "city": "Accra"}
@@ -305,13 +263,19 @@ async def whatsapp_webhook(request: Request):
             guest_name=sender
         )
         reply_text = result.get("response", "How may I assist you?")
+        print(f"AI reply: {reply_text}")
 
-        # Send reply via 360dialog API
-        async with httpx.AsyncClient() as client:
+        # Send reply via 360dialog API (or Meta Cloud API)
+        api_key = settings.DIALOG_API_KEY
+        if not api_key:
+            print("DIALOG_API_KEY is not set in environment")
+            return {"status": "error", "detail": "Missing API key"}
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 "https://waba-sandbox.360dialog.io/v1/messages",
                 headers={
-                    "D360-API-KEY": settings.DIALOG_API_KEY,
+                    "D360-API-KEY": api_key,
                     "Content-Type": "application/json"
                 },
                 json={
@@ -322,11 +286,13 @@ async def whatsapp_webhook(request: Request):
                     "text": {"body": reply_text}
                 }
             )
-            if resp.status_code != 201:
-                print(f"Failed to send message: {resp.text}")
+            if resp.status_code == 201:
+                print("Reply sent successfully")
+            else:
+                print(f"Failed to send reply: {resp.status_code} - {resp.text}")
 
         return {"status": "ok"}
 
     except Exception as e:
         print(f"Webhook error: {e}")
-        return {"status": "error"}
+        return {"status": "error", "detail": str(e)}
