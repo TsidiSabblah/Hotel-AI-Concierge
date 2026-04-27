@@ -225,22 +225,72 @@ async def whatsapp_webhook(request: Request):
 async def whatsapp_webhook(request: Request):
     try:
         body = await request.json()
-        print(f"Incoming webhook: {body}")
+        print(f"Full webhook body: {body}")
 
-        # Extract message from 360dialog format
+        # Extract sender and message (360dialog format)
+        sender = None
+        message_text = None
+
+        # Try 360dialog format
         messages = body.get("messages", [])
-        if not messages:
-            # Try alternative format (Meta Cloud API)
+        if messages:
+            sender = messages[0].get("from")
+            message_text = messages[0].get("text", {}).get("body")
+
+        # If not found, try Meta Cloud API format
+        if not sender:
             entry = body.get("entry", [])
             if entry:
                 changes = entry[0].get("changes", [])
                 if changes:
                     value = changes[0].get("value", {})
-                    messages = value.get("messages", [])
+                    msgs = value.get("messages", [])
+                    if msgs:
+                        sender = msgs[0].get("from")
+                        message_text = msgs[0].get("text", {}).get("body")
 
-        if not messages:
+        if not sender or not message_text:
+            print(f"Could not extract sender/message from: {body}")
             return {"status": "ok"}
 
+        print(f"Sender: {sender}, Message: {message_text}")
+
+        # Call AI agent
+        hotel_context = {"name": "Test Hotel", "city": "Accra"}
+        result = await hotel_agent.process_message(
+            message=message_text,
+            hotel_context=hotel_context,
+            guest_name=sender
+        )
+        reply_text = result.get("response", "How may I assist you?")
+        print(f"AI Reply: {reply_text}")
+
+        # Send reply via 360dialog API
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://waba-sandbox.360dialog.io/v1/messages",
+                headers={
+                    "D360-API-KEY": settings.DIALOG_API_KEY,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": sender,
+                    "type": "text",
+                    "text": {"body": reply_text}
+                }
+            )
+            if resp.status_code != 201:
+                print(f"Failed to send: {resp.text}")
+            else:
+                print(f"Reply sent to {sender}")
+
+        return {"status": "ok"}
+
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return {"status": "error"}
         msg = messages[0]
         sender = msg.get("from")
         text = msg.get("text", {}).get("body", "")
