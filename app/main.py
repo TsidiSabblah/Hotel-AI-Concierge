@@ -4,7 +4,8 @@ from fastapi.responses import Response
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-import httpx import os
+import httpx 
+import os
 
 from app.admin import setup_admin
 from app.db import init_db, get_hotel_by_phone, get_or_create_guest
