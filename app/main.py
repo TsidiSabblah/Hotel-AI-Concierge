@@ -4,7 +4,7 @@ from fastapi.responses import Response
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-import httpx
+import httpx import os
 
 from app.admin import setup_admin
 from app.db import init_db, get_hotel_by_phone, get_or_create_guest
@@ -171,60 +171,6 @@ from app.config import settings
 async def whatsapp_webhook(request: Request):
     try:
         body = await request.json()
-        print(f"Incoming webhook: {body}")
-
-        # Extract sender and message text (360dialog format may differ)
-        # Typical 360dialog incoming webhook payload:
-        # {"messages": [{"from": "123456789", "text": {"body": "Hi"}}]}
-        messages = body.get("messages", [])
-        if not messages:
-            return {"status": "ok"}
-
-        msg = messages[0]
-        sender = msg.get("from")
-        text = msg.get("text", {}).get("body", "")
-
-        if not text:
-            return {"status": "ok"}
-
-        # Call your AI agent to get a reply
-        hotel_context = {"name": "Test Hotel", "city": "Accra"}
-        result = await hotel_agent.process_message(
-            message=text,
-            hotel_context=hotel_context,
-            guest_name=sender or "Guest"
-        )
-        reply_text = result.get("response", "How may I assist you?")
-
-        # Send reply via 360dialog API
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://waba-sandbox.360dialog.io/v1/messages",
-                headers={
-                    "D360-API-KEY": settings.DIALOG_API_KEY,
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "recipient_type": "individual",
-                    "to": sender,
-                    "type": "text",
-                    "text": {"body": reply_text}
-                }
-            )
-            if resp.status_code != 201:
-                print(f"Failed to send message: {resp.text}")
-
-        return {"status": "ok"}
-
-    except Exception as e:
-        print(f"Webhook error: {e}")
-        return {"status": "error"}
-
-
-@app.post("/webhook/whatsapp")
-async def whatsapp_webhook(request: Request):
-    try:
-        body = await request.json()
         print("📨 Full webhook payload received")
 
         # --- Extract message from Meta Cloud API format (used by 360dialog) ---
@@ -302,3 +248,12 @@ async def whatsapp_webhook(request: Request):
     except Exception as e:
         print(f"🔥 Webhook error: {e}")
         return {"status": "error", "detail": str(e)}
+
+@app.get("/debug-key")
+async def debug_key():
+    from app.config import settings
+    return {
+        "has_key": bool(settings.DIALOG_API_KEY),
+        "key_prefix": settings.DIALOG_API_KEY[:10] if settings.DIALOG_API_KEY else None,
+        "env_var": os.getenv("DIALOG_API_KEY") is not None
+    }
