@@ -18,32 +18,24 @@ import uuid
 # Initialize AI agent
 hotel_agent = HotelAgent()
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    print("🚀 Starting Hotel AI Concierge...")
-    await init_db()
-async with AsyncSessionLocal() as session:
-    result = await session.execute(select(Business))
-    if not result.scalars().first():
-        session.add(Business(
-            id="biz-111",
-            name="Royal Serenity Hotel",
-            type="hotel",
-            whatsapp_number="+55 11 4673-3492",
-            city="Accra"
-        ))
-        await session.commit()
-        print("✅ Sample business added")
+from app.db import AsyncSessionLocal, Business, BusinessKnowledge
+from sqlalchemy import select, insert
+import uuid
+
+# ============ SEED FUNCTION (place BEFORE lifespan) ============
 async def seed_businesses():
+    """Add sample businesses if none exist"""
     async with AsyncSessionLocal() as session:
-        # Check if businesses table is empty
+        # Check if businesses table has data
         result = await session.execute(select(Business))
         existing = result.scalars().first()
         if existing:
+            print("✅ Businesses already exist, skipping seed")
             return
 
-        # Insert sample data
+        print("🌱 Seeding sample businesses...")
+        
+        # Insert sample businesses
         biz1 = Business(
             id=str(uuid.uuid4()),
             name="Royal Serenity Hotel",
@@ -64,15 +56,35 @@ async def seed_businesses():
         # Add sample knowledge
         await session.execute(
             insert(BusinessKnowledge).values([
-                {"id": str(uuid.uuid4()), "business_id": biz1.id, "category": "breakfast", "question": "What time is breakfast?", "answer": "6:30-10:30 AM"},
-                {"id": str(uuid.uuid4()), "business_id": biz2.id, "category": "wifi", "question": "What is the WiFi password?", "answer": "OceanView2025"},
+                {
+                    "id": str(uuid.uuid4()),
+                    "business_id": biz1.id,
+                    "category": "breakfast",
+                    "question": "What time is breakfast?",
+                    "answer": "Breakfast is 6:30-10:30 AM at Palm Court Restaurant"
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "business_id": biz2.id,
+                    "category": "wifi",
+                    "question": "What is the WiFi password?",
+                    "answer": "WiFi: OceanView2025"
+                },
             ])
         )
         await session.commit()
-        print("✅ Sample businesses and knowledge added to database.")
+        print("✅ Sample businesses and knowledge added")
 
-# Call this function inside your lifespan after init_db()
-
+# ============ LIFESPAN FUNCTION ============
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("🚀 Starting Hotel AI Concierge...")
+    await init_db()
+    
+    # Seed businesses (adds sample data if empty)
+    await seed_businesses()
+    
     print("✅ Database ready")
     print(f"🤖 AI Agent: {settings.LLM_MODEL}")
     print(f"📱 Server running at http://localhost:8000")
