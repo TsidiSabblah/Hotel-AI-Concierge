@@ -234,19 +234,43 @@ async def debug_ai():
 import httpx
 from app.config import settings
 
+async def send_whatsapp_reply(to: str, message: str):
+    """Send WhatsApp reply via 360dialog"""
+    api_key = settings.DIALOG_API_KEY
+    if not api_key:
+        print("❌ DIALOG_API_KEY not set")
+        return
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            "https://waba-sandbox.360dialog.io/v1/messages",
+            headers={
+                "D360-API-KEY": api_key,
+                "Content-Type": "application/json"
+            },
+            json={
+                "messaging_product": "whatsapp",
+                "to": to,
+                "type": "text",
+                "text": {"body": message}
+            }
+        )
+        if response.status_code == 201:
+            print("✅ Reply sent")
+        else:
+            print(f"❌ Failed: {response.text}")
+
 @app.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):
     try:
         body = await request.json()
         print("📨 Full webhook payload received")
 
-        # --- Extract message from Meta Cloud API format (used by 360dialog) ---
+        # --- Extract message from Meta Cloud API format ---
         messages = []
-        # Direct 'messages' field
         if "messages" in body:
             messages = body["messages"]
         else:
-            # Drill down into entry[0].changes[0].value.messages
             entries = body.get("entry", [])
             for entry in entries:
                 changes = entry.get("changes", [])
@@ -259,7 +283,7 @@ async def whatsapp_webhook(request: Request):
                     break
 
         if not messages:
-            print("⚠️ No messages found in payload")
+            print("⚠️ No messages found")
             return {"status": "ok"}
 
         msg = messages[0]
@@ -267,48 +291,57 @@ async def whatsapp_webhook(request: Request):
         text = msg.get("text", {}).get("body", "")
 
         if not sender or not text:
-            print(f"⚠️ Missing sender or text: sender={sender}, text={text}")
             return {"status": "ok"}
 
-        print(f"✅ Processing message from {sender}: '{text}'")
+        # --- NEW: Find which business this is for ---
+        # Get the business phone number from webhook metadata
+        metadata = body.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("metadata", {})
+        business_phone = metadata.get("display_phone_number")
+        
+        async with AsyncSessionLocal() as session:
+            # Find business by WhatsApp number
+            result = await session.execute(
+                select(Business).where(Business.whatsapp_number == business_phone)
+            )
+            business = result.scalar_one_or_none()
+            
+            if not business:
+                print(f"⚠️ No business found for number: {business_phone}")
+                # Fallback to default
+                reply_text = "Thank you for your message. Our team will get back to you shortly."
+                await send_whatsapp_reply(sender, reply_text)
+                return {"status": "ok"}
+            
+            # Load business-specific knowledge (FAQ)
+            result = await session.execute(
+                select(BusinessKnowledge).where(BusinessKnowledge.business_id == business.id)
+            )
+            knowledge_items = result.scalars().all()
+            
+            # Build context for AI
+            hotel_context = {
+                "name": business.name,
+                "type": business.type,
+                "city": business.city,
+                "knowledge": [
+                    {"question": k.question, "answer": k.answer}
+                    for k in knowledge_items
+                ]
+            }
 
-        # --- Call your AI agent ---
-        hotel_context = {"name": "Test Hotel", "city": "Accra"}
+        print(f"✅ Processing for business: {business.name}")
+        print(f"✅ Message from {sender}: '{text}'")
+
+        # Call AI agent
         result = await hotel_agent.process_message(
             message=text,
             hotel_context=hotel_context,
             guest_name=sender
         )
-        reply_text = result.get("response", "I'm sorry, I didn't understand that.")
-        print(f"🤖 AI reply: {reply_text}")
+        reply_text = result.get("response", "How may I assist you?")
 
-        # --- Send reply via 360dialog API ---
-        api_key = settings.DIALOG_API_KEY
-        if not api_key:
-            print("❌ DIALOG_API_KEY is not set in environment variables")
-            return {"status": "error", "detail": "Missing API key"}
-
-        print(f"🔑 Using API key: {api_key[:10]}...")
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://waba-sandbox.360dialog.io/v1/messages",
-                headers={
-                    "D360-API-KEY": api_key,
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "messaging_product": "whatsapp",
-                    "recipient_type": "individual",
-                    "to": sender,
-                    "type": "text",
-                    "text": {"body": reply_text}
-                }
-            )
-            if response.status_code == 201:
-                print("✅ Reply sent successfully")
-            else:
-                print(f"❌ Failed to send reply: {response.status_code} - {response.text}")
+        # Send reply
+        await send_whatsapp_reply(sender, reply_text)
 
         return {"status": "ok"}
 
