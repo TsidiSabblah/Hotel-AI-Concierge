@@ -12,6 +12,9 @@ from app.admin import setup_admin
 from app.db import init_db, get_hotel_by_phone, get_or_create_guest
 from app.config import settings
 from agents.hotel_agent import HotelAgent
+from app.db import AsyncSessionLocal, Business, BusinessKnowledge
+from sqlalchemy import select
+import uuid
 # Initialize AI agent
 hotel_agent = HotelAgent()
 
@@ -20,6 +23,56 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting Hotel AI Concierge...")
     await init_db()
+async with AsyncSessionLocal() as session:
+    result = await session.execute(select(Business))
+    if not result.scalars().first():
+        session.add(Business(
+            id="biz-111",
+            name="Royal Serenity Hotel",
+            type="hotel",
+            whatsapp_number="+55 11 4673-3492",
+            city="Accra"
+        ))
+        await session.commit()
+        print("✅ Sample business added")
+async def seed_businesses():
+    async with AsyncSessionLocal() as session:
+        # Check if businesses table is empty
+        result = await session.execute(select(Business))
+        existing = result.scalars().first()
+        if existing:
+            return
+
+        # Insert sample data
+        biz1 = Business(
+            id=str(uuid.uuid4()),
+            name="Royal Serenity Hotel",
+            type="hotel",
+            whatsapp_number="+55 11 4673-3492",
+            city="Accra"
+        )
+        biz2 = Business(
+            id=str(uuid.uuid4()),
+            name="Ocean View Apartments",
+            type="apartment",
+            whatsapp_number="+55 11 4673-3493",
+            city="Accra"
+        )
+        session.add_all([biz1, biz2])
+        await session.commit()
+
+        # Add sample knowledge
+        await session.execute(
+            insert(BusinessKnowledge).values([
+                {"id": str(uuid.uuid4()), "business_id": biz1.id, "category": "breakfast", "question": "What time is breakfast?", "answer": "6:30-10:30 AM"},
+                {"id": str(uuid.uuid4()), "business_id": biz2.id, "category": "wifi", "question": "What is the WiFi password?", "answer": "OceanView2025"},
+            ])
+        )
+        await session.commit()
+        print("✅ Sample businesses and knowledge added to database.")
+
+# Call this function inside your lifespan after init_db()
+
     print("✅ Database ready")
     print(f"🤖 AI Agent: {settings.LLM_MODEL}")
     print(f"📱 Server running at http://localhost:8000")
