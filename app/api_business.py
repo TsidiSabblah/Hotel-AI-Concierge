@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from app.db import AsyncSessionLocal
-from app.models_business import Business, BusinessUser, BusinessKnowledge
+from app.db import Business, BusinessUser, BusinessKnowledge
 from sqlalchemy import select
 import uuid
 import bcrypt
