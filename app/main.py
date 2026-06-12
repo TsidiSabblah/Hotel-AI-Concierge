@@ -4,6 +4,7 @@ from fastapi.responses import Response
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
+from app.api_business import router as business_router
 import httpx 
 import os
 
@@ -32,7 +33,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
-
+app.include_router(business_router)
 # Setup admin panel
 setup_admin(app)   
 
