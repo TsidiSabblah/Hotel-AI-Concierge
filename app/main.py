@@ -4,25 +4,23 @@ from fastapi.responses import Response
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-from app.api_business import router as business_router
-import httpx 
+import httpx
 import os
+import uuid
 
+from app.api_business import router as business_router
 from app.admin import setup_admin
 from app.db import init_db, get_hotel_by_phone, get_or_create_guest
+from app.db import AsyncSessionLocal, Business, BusinessKnowledge
 from app.config import settings
 from agents.hotel_agent import HotelAgent
-from app.db import AsyncSessionLocal, Business, BusinessKnowledge
-from sqlalchemy import select
-import uuid
+from sqlalchemy import select, insert
+
 # Initialize AI agent
 hotel_agent = HotelAgent()
 
-from app.db import AsyncSessionLocal, Business, BusinessKnowledge
-from sqlalchemy import select, insert
-import uuid
 
-# ============ SEED FUNCTION (place BEFORE lifespan) ============
+# ============ SEED FUNCTION ============
 async def seed_businesses():
     """Add sample businesses if none exist"""
     async with AsyncSessionLocal() as session:
@@ -34,7 +32,7 @@ async def seed_businesses():
             return
 
         print("🌱 Seeding sample businesses...")
-        
+
         # Insert sample businesses
         biz1 = Business(
             id=str(uuid.uuid4()),
@@ -75,172 +73,15 @@ async def seed_businesses():
         await session.commit()
         print("✅ Sample businesses and knowledge added")
 
-# ============ LIFESPAN FUNCTION ============
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    print("🚀 Starting Hotel AI Concierge...")
-    await init_db()
-    
-    # Seed businesses (adds sample data if empty)
-    await seed_businesses()
-    
-    print("✅ Database ready")
-    print(f"🤖 AI Agent: {settings.LLM_MODEL}")
-    print(f"📱 Server running at http://localhost:8000")
-    yield
-    # Shutdown
-    print("👋 Shutting down...")
 
-app = FastAPI(
-    title="Hotel AI Concierge",
-    description="AI-powered guest experience for Ghana hotels",
-    version="1.0.0",
-    lifespan=lifespan
-)
-app.include_router(business_router)
-# Setup admin panel
-setup_admin(app)   
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Request/Response Models
-class ChatRequest(BaseModel):
-    message: str
-    phone_number: str
-    hotel_phone: str
-
-class ChatResponse(BaseModel):
-    response: str
-    intent: str
-    needs_human: bool
-
-@app.get("/")
-async def root():
-    return {
-        "status": "online", 
-        "service": "Hotel AI Concierge", 
-        "message": "Welcome to Ghana's first AI hotel concierge",
-        "database": "SQLite (working without Docker)",
-        "ai_agent": "ready" if settings.GROQ_API_KEY and settings.GROQ_API_KEY != "placeholder_get_from_groq.com" else "needs API key"
-    }
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "database": "connected"}
-
-@app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
-    """
-    Process a guest message and return AI response
-    """
-    try:
-        # Get hotel by phone number
-        hotel = await get_hotel_by_phone(request.hotel_phone)
-        if not hotel:
-            raise HTTPException(status_code=404, detail="Hotel not found")
-        
-        # Get or create guest
-        guest = await get_or_create_guest(request.phone_number, hotel.id)
-        
-        # Process with AI
-        hotel_context = {
-            "name": hotel.name,
-            "city": hotel.city,
-            "id": hotel.id
-        }
-        
-        result = await hotel_agent.process_message(
-            message=request.message,
-            hotel_context=hotel_context,
-            guest_name=guest.name or "Guest"
-        )
-        
-        return ChatResponse(
-            response=result.get("response", "Thank you for your message. How else can I assist you?"),
-            intent=result.get("intent", "general_question"),
-            needs_human=result.get("needs_human", False)
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-@app.get("/test-simple")
-async def test_simple():
-    """Simple test to verify AI is responding"""
-    if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "placeholder_get_from_groq.com":
-        return {"status": "error", "message": "GROQ_API_KEY not configured"}
-    
-    test_message = "What time is breakfast?"
-    response = await hotel_agent.simple_chat(test_message)
-    return {"status": "ok", "question": test_message, "answer": response}
-
-@app.get("/test-ai")
-async def test_ai():
-    """Test endpoint to verify AI is working"""
-    if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "placeholder_get_from_groq.com":
-        return {"status": "error", "message": "GROQ_API_KEY not configured in .env file"}
-    
-    test_message = "What time is breakfast?"
-    hotel_context = {"name": "Test Hotel Accra", "city": "Accra"}
-    
-    result = await hotel_agent.process_message(test_message, hotel_context)
-    return {"status": "ok", "test_result": result}
-@app.get("/debug-ai")
-async def debug_ai():
-    """Debug endpoint to see raw AI response"""
-    import traceback
-    from agents.hotel_agent import HotelAgent
-    
-    if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "placeholder_get_from_groq.com":
-        return {"status": "error", "message": "GROQ_API_KEY not configured"}
-    
-    agent = HotelAgent()
-    test_message = "What time is breakfast?"
-    hotel_context = {"name": "Test Hotel", "city": "Accra"}
-    
-    try:
-        # Call the AI directly without any parsing
-        response = agent.client.chat.completions.create(
-            model=settings.LLM_MODEL,
-            messages=[{"role": "user", "content": f"Answer briefly: {test_message}"}],
-            temperature=0.7,
-            max_tokens=100
-        )
-        
-        raw_result = response.choices[0].message.content
-        
-        return {
-            "status": "ok",
-            "raw_response": raw_result,
-            "model": settings.LLM_MODEL,
-            "api_key_prefix": settings.GROQ_API_KEY[:10] + "..."
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "traceback": traceback.format_exc()
-        }
-import httpx
-from app.config import settings
-
+# ============ HELPER FUNCTION ============
 async def send_whatsapp_reply(to: str, message: str):
     """Send WhatsApp reply via 360dialog"""
     api_key = settings.DIALOG_API_KEY
     if not api_key:
         print("❌ DIALOG_API_KEY not set")
         return
-    
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             "https://waba-sandbox.360dialog.io/v1/messages",
@@ -260,6 +101,191 @@ async def send_whatsapp_reply(to: str, message: str):
         else:
             print(f"❌ Failed: {response.text}")
 
+
+# ============ LIFESPAN FUNCTION ============
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("🚀 Starting Hotel AI Concierge...")
+    await init_db()
+
+    # Seed businesses (adds sample data if empty)
+    await seed_businesses()
+
+    print("✅ Database ready")
+    print(f"🤖 AI Agent: {settings.LLM_MODEL}")
+    print(f"📱 Server running at http://localhost:8000")
+    yield
+    # Shutdown
+    print("👋 Shutting down...")
+
+
+# ============ FASTAPI APP ============
+app = FastAPI(
+    title="Hotel AI Concierge",
+    description="AI-powered guest experience for Ghana hotels",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Include routers
+app.include_router(business_router)
+
+# Setup admin panel
+setup_admin(app)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ============ REQUEST/RESPONSE MODELS ============
+class ChatRequest(BaseModel):
+    message: str
+    phone_number: str
+    hotel_phone: str
+
+
+class ChatResponse(BaseModel):
+    response: str
+    intent: str
+    needs_human: bool
+
+
+# ============ ROOT ENDPOINTS ============
+@app.get("/")
+async def root():
+    return {
+        "status": "online",
+        "service": "Hotel AI Concierge",
+        "message": "Welcome to Ghana's first AI hotel concierge",
+        "database": "SQLite (working without Docker)",
+        "ai_agent": "ready" if settings.GROQ_API_KEY and settings.GROQ_API_KEY != "placeholder_get_from_groq.com" else "needs API key"
+    }
+
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "database": "connected"}
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    Process a guest message and return AI response
+    """
+    try:
+        # Get hotel by phone number
+        hotel = await get_hotel_by_phone(request.hotel_phone)
+        if not hotel:
+            raise HTTPException(status_code=404, detail="Hotel not found")
+
+        # Get or create guest
+        guest = await get_or_create_guest(request.phone_number, hotel.id)
+
+        # Process with AI
+        hotel_context = {
+            "name": hotel.name,
+            "city": hotel.city,
+            "id": hotel.id
+        }
+
+        result = await hotel_agent.process_message(
+            message=request.message,
+            hotel_context=hotel_context,
+            guest_name=guest.name or "Guest"
+        )
+
+        return ChatResponse(
+            response=result.get("response", "Thank you for your message. How else can I assist you?"),
+            intent=result.get("intent", "general_question"),
+            needs_human=result.get("needs_human", False)
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ TEST ENDPOINTS ============
+@app.get("/test-simple")
+async def test_simple():
+    """Simple test to verify AI is responding"""
+    if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "placeholder_get_from_groq.com":
+        return {"status": "error", "message": "GROQ_API_KEY not configured"}
+
+    test_message = "What time is breakfast?"
+    response = await hotel_agent.simple_chat(test_message)
+    return {"status": "ok", "question": test_message, "answer": response}
+
+
+@app.get("/test-ai")
+async def test_ai():
+    """Test endpoint to verify AI is working"""
+    if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "placeholder_get_from_groq.com":
+        return {"status": "error", "message": "GROQ_API_KEY not configured in .env file"}
+
+    test_message = "What time is breakfast?"
+    hotel_context = {"name": "Test Hotel Accra", "city": "Accra"}
+
+    result = await hotel_agent.process_message(test_message, hotel_context)
+    return {"status": "ok", "test_result": result}
+
+
+@app.get("/debug-ai")
+async def debug_ai():
+    """Debug endpoint to see raw AI response"""
+    import traceback
+
+    if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "placeholder_get_from_groq.com":
+        return {"status": "error", "message": "GROQ_API_KEY not configured"}
+
+    agent = HotelAgent()
+    test_message = "What time is breakfast?"
+
+    try:
+        # Call the AI directly without any parsing
+        response = agent.client.chat.completions.create(
+            model=settings.LLM_MODEL,
+            messages=[{"role": "user", "content": f"Answer briefly: {test_message}"}],
+            temperature=0.7,
+            max_tokens=100
+        )
+
+        raw_result = response.choices[0].message.content
+
+        return {
+            "status": "ok",
+            "raw_response": raw_result,
+            "model": settings.LLM_MODEL,
+            "api_key_prefix": settings.GROQ_API_KEY[:10] + "..."
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+
+
+@app.get("/debug-key")
+async def debug_key():
+    return {
+        "has_key": bool(settings.DIALOG_API_KEY),
+        "key_prefix": settings.DIALOG_API_KEY[:10] if settings.DIALOG_API_KEY else None,
+        "env_var": os.getenv("DIALOG_API_KEY") is not None
+    }
+
+
+# ============ WEBHOOK ENDPOINT ============
 @app.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):
     try:
@@ -294,32 +320,31 @@ async def whatsapp_webhook(request: Request):
             return {"status": "ok"}
 
         # --- Find which business this is for ---
-        # Get the business phone number from webhook metadata
         metadata = body.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("metadata", {})
         business_phone_raw = metadata.get("display_phone_number", "")
-        
-        # Clean the phone number to match database format (remove spaces, dashes, etc.)
+
+        # Clean the phone number to match database format
         business_phone = business_phone_raw.replace(" ", "").replace("-", "").replace("+", "")
-        
+
         async with AsyncSessionLocal() as session:
-            # Try to find business by cleaned number (without +)
+            # Try to find business by cleaned number
             result = await session.execute(
                 select(Business).where(Business.whatsapp_number.contains(business_phone))
             )
             business = result.scalar_one_or_none()
-            
+
             if not business:
                 print(f"⚠️ No business found for number: {business_phone_raw}")
                 reply_text = "Thank you for your message. Our team will get back to you shortly."
                 await send_whatsapp_reply(sender, reply_text)
                 return {"status": "ok"}
-            
+
             # Load business-specific knowledge (FAQ)
             result = await session.execute(
                 select(BusinessKnowledge).where(BusinessKnowledge.business_id == business.id)
             )
             knowledge_items = result.scalars().all()
-            
+
             # Build context for AI
             hotel_context = {
                 "name": business.name,
@@ -350,11 +375,3 @@ async def whatsapp_webhook(request: Request):
     except Exception as e:
         print(f"🔥 Webhook error: {e}")
         return {"status": "error", "detail": str(e)}
-@app.get("/debug-key")
-async def debug_key():
-    from app.config import settings
-    return {
-        "has_key": bool(settings.DIALOG_API_KEY),
-        "key_prefix": settings.DIALOG_API_KEY[:10] if settings.DIALOG_API_KEY else None,
-        "env_var": os.getenv("DIALOG_API_KEY") is not None
-    }
