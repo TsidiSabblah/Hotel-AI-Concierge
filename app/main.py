@@ -293,21 +293,23 @@ async def whatsapp_webhook(request: Request):
         if not sender or not text:
             return {"status": "ok"}
 
-        # --- NEW: Find which business this is for ---
+        # --- Find which business this is for ---
         # Get the business phone number from webhook metadata
         metadata = body.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("metadata", {})
-        business_phone = metadata.get("display_phone_number")
+        business_phone_raw = metadata.get("display_phone_number", "")
+        
+        # Clean the phone number to match database format (remove spaces, dashes, etc.)
+        business_phone = business_phone_raw.replace(" ", "").replace("-", "").replace("+", "")
         
         async with AsyncSessionLocal() as session:
-            # Find business by WhatsApp number
+            # Try to find business by cleaned number (without +)
             result = await session.execute(
-                select(Business).where(Business.whatsapp_number == business_phone)
+                select(Business).where(Business.whatsapp_number.contains(business_phone))
             )
             business = result.scalar_one_or_none()
             
             if not business:
-                print(f"⚠️ No business found for number: {business_phone}")
-                # Fallback to default
+                print(f"⚠️ No business found for number: {business_phone_raw}")
                 reply_text = "Thank you for your message. Our team will get back to you shortly."
                 await send_whatsapp_reply(sender, reply_text)
                 return {"status": "ok"}
@@ -348,7 +350,6 @@ async def whatsapp_webhook(request: Request):
     except Exception as e:
         print(f"🔥 Webhook error: {e}")
         return {"status": "error", "detail": str(e)}
-
 @app.get("/debug-key")
 async def debug_key():
     from app.config import settings
