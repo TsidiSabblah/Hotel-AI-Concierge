@@ -5,8 +5,40 @@ from sqlalchemy import select
 import uuid
 import bcrypt
 from typing import List, Optional
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
 
 router = APIRouter(prefix="/api/business", tags=["business"])
+
+security = HTTPBasic()
+
+@router.post("/login")
+async def business_login(credentials: HTTPBasicCredentials = Depends(security)):
+    async with AsyncSessionLocal() as session:
+        # Find user by email
+        result = await session.execute(
+            select(BusinessUser).where(BusinessUser.email == credentials.username)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Simple password check (plain text – will upgrade to hashing later)
+        if credentials.password != user.password_hash:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Generate a simple session token (for now)
+        token = secrets.token_urlsafe(32)
+        
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "business_id": user.business_id,
+            "name": user.name,
+            "role": user.role,
+            "message": "Login successful"
+        }
 
 # ============ Business CRUD ============
 
