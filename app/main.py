@@ -11,7 +11,7 @@ import uuid
 from app.api_business import router as business_router
 from app.admin import setup_admin
 from app.db import init_db, get_hotel_by_phone, get_or_create_guest
-from app.db import AsyncSessionLocal, Business, BusinessKnowledge
+from app.db import AsyncSessionLocal, Business, BusinessKnowledge, BusinessUser
 from app.config import settings
 from agents.hotel_agent import HotelAgent
 from sqlalchemy import select, insert
@@ -45,7 +45,7 @@ async def seed_businesses():
             id=str(uuid.uuid4()),
             name="Ocean View Apartments",
             type="apartment",
-            whatsapp_number="551146733493",  # No +, no spaces
+            whatsapp_number="551146733493",
             city="Accra"
         )
         session.add_all([biz1, biz2])
@@ -71,6 +71,28 @@ async def seed_businesses():
             ])
         )
         await session.commit()
+
+        # ============ CREATE TEST MANAGER USER ============
+        result = await session.execute(
+            select(BusinessUser).where(BusinessUser.email == "manager@royalserenity.com")
+        )
+        existing_user = result.scalar_one_or_none()
+
+        if not existing_user:
+            test_user = BusinessUser(
+                id=str(uuid.uuid4()),
+                business_id=biz1.id,
+                email="manager@royalserenity.com",
+                password_hash="hotel123",
+                name="John Mensah",
+                role="manager"
+            )
+            session.add(test_user)
+            await session.commit()
+            print("✅ Test manager user created.")
+        else:
+            print("ℹ️ Test manager user already exists, skipping creation.")
+
         print("✅ Sample businesses and knowledge added")
 
 
@@ -251,7 +273,6 @@ async def debug_ai():
     test_message = "What time is breakfast?"
 
     try:
-        # Call the AI directly without any parsing
         response = agent.client.chat.completions.create(
             model=settings.LLM_MODEL,
             messages=[{"role": "user", "content": f"Answer briefly: {test_message}"}],
