@@ -202,3 +202,17 @@ async def get_business_stats(business_id: str):
             "total_guests": total_guests,
             "business_id": business_id
         }
+@router.get("/debug-password/{email}")
+async def debug_password(email: str):
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(BusinessUser).where(BusinessUser.email == email)
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            return {
+                "email": user.email,
+                "stored_password": user.password_hash,
+                "name": user.name
+            }
+        return {"error": "User not found"}
