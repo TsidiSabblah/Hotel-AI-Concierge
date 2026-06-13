@@ -18,29 +18,6 @@ from sqlalchemy import select, insert
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-# ============ FASTAPI APP ============
-app = FastAPI(
-    title="Hotel AI Concierge",
-    description="AI-powered guest experience for Ghana hotels",
-    version="1.0.0",
-    lifespan=lifespan
-)
-
-
-@app.get("/manager-login", response_class=HTMLResponse)
-async def manager_login():
-    with open("app/manager_login.html", "r") as f:
-        return f.read()
-
-@app.get("/manager-dashboard", response_class=HTMLResponse)
-async def manager_dashboard():
-    with open("app/manager_dashboard.html", "r") as f:
-        return f.read()
-
-# Initialize AI agent
-hotel_agent = HotelAgent()
-
-
 # ============ SEED FUNCTION ============
 async def seed_businesses():
     """Add sample businesses if none exist"""
@@ -145,6 +122,7 @@ async def send_whatsapp_reply(to: str, message: str):
             print(f"❌ Failed: {response.text}")
 
 
+
 # ============ LIFESPAN FUNCTION ============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -178,6 +156,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ============ FASTAPI APP ============
+app = FastAPI(
+    title="Hotel AI Concierge",
+    description="AI-powered guest experience for Ghana hotels",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+
+@app.get("/manager-login", response_class=HTMLResponse)
+async def manager_login():
+    with open("app/manager_login.html", "r") as f:
+        return f.read()
+
+@app.get("/manager-dashboard", response_class=HTMLResponse)
+async def manager_dashboard():
+    with open("app/manager_dashboard.html", "r") as f:
+        return f.read()
+
+# Initialize AI agent
+hotel_agent = HotelAgent()
+
+
+
 
 
 # ============ REQUEST/RESPONSE MODELS ============
