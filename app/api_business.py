@@ -1,21 +1,20 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from app.db import AsyncSessionLocal
 from app.db import Business, BusinessUser, BusinessKnowledge
 from sqlalchemy import select
 import uuid
-import bcrypt
-from typing import List, Optional
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import secrets
+from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api/business", tags=["business"])
-
 security = HTTPBasic()
 
+
+# ============ LOGIN ENDPOINT ============
 @router.post("/login")
 async def business_login(credentials: HTTPBasicCredentials = Depends(security)):
     async with AsyncSessionLocal() as session:
-        # Find user by email
         result = await session.execute(
             select(BusinessUser).where(BusinessUser.email == credentials.username)
         )
@@ -24,11 +23,9 @@ async def business_login(credentials: HTTPBasicCredentials = Depends(security)):
         if not user:
             raise HTTPException(status_code=401, detail="Invalid email or password")
         
-        # Simple password check (plain text – will upgrade to hashing later)
         if credentials.password != user.password_hash:
             raise HTTPException(status_code=401, detail="Invalid email or password")
         
-        # Generate a simple session token (for now)
         token = secrets.token_urlsafe(32)
         
         return {
@@ -40,8 +37,8 @@ async def business_login(credentials: HTTPBasicCredentials = Depends(security)):
             "message": "Login successful"
         }
 
-# ============ Business CRUD ============
 
+# ============ BUSINESS CRUD ============
 @router.get("/")
 async def get_businesses():
     """List all businesses (super admin)"""
@@ -60,6 +57,7 @@ async def get_businesses():
             for b in businesses
         ]
 
+
 @router.post("/")
 async def create_business(data: dict):
     """Create a new business"""
@@ -77,6 +75,7 @@ async def create_business(data: dict):
         await session.commit()
         await session.refresh(business)
         return {"id": business.id, "name": business.name}
+
 
 @router.get("/{business_id}")
 async def get_business(business_id: str):
@@ -99,8 +98,8 @@ async def get_business(business_id: str):
             "is_active": business.is_active
         }
 
-# ============ Business Knowledge ============
 
+# ============ BUSINESS KNOWLEDGE ============
 @router.get("/{business_id}/knowledge")
 async def get_knowledge(business_id: str):
     """Get all FAQ/knowledge for a business"""
@@ -119,6 +118,7 @@ async def get_knowledge(business_id: str):
             for k in knowledge
         ]
 
+
 @router.post("/{business_id}/knowledge")
 async def add_knowledge(business_id: str, data: dict):
     """Add FAQ/knowledge for a business"""
@@ -133,6 +133,7 @@ async def add_knowledge(business_id: str, data: dict):
         session.add(knowledge)
         await session.commit()
         return {"id": knowledge.id, "message": "Knowledge added"}
+
 
 @router.put("/{business_id}/knowledge/{knowledge_id}")
 async def update_knowledge(business_id: str, knowledge_id: str, data: dict):
@@ -155,6 +156,7 @@ async def update_knowledge(business_id: str, knowledge_id: str, data: dict):
         await session.commit()
         return {"message": "Knowledge updated"}
 
+
 @router.delete("/{business_id}/knowledge/{knowledge_id}")
 async def delete_knowledge(business_id: str, knowledge_id: str):
     """Delete FAQ/knowledge"""
@@ -173,16 +175,14 @@ async def delete_knowledge(business_id: str, knowledge_id: str):
         await session.commit()
         return {"message": "Knowledge deleted"}
 
-# ============ Statistics ============
 
+# ============ STATISTICS ============
 @router.get("/{business_id}/stats")
 async def get_business_stats(business_id: str):
     """Get message volume stats for a business"""
-    from app.db import Message, Conversation
-    from datetime import datetime, timedelta
+    from app.db import Message, Guest
     
     async with AsyncSessionLocal() as session:
-        # Count messages last 7 days
         week_ago = datetime.utcnow() - timedelta(days=7)
         result = await session.execute(
             select(Message).where(
@@ -192,8 +192,6 @@ async def get_business_stats(business_id: str):
         )
         weekly_messages = len(result.scalars().all())
         
-        # Count total guests
-        from app.db import Guest
         result = await session.execute(
             select(Guest).where(Guest.business_id == business_id)
         )
