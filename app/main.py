@@ -15,6 +15,18 @@ from app.db import AsyncSessionLocal, Business, BusinessKnowledge, BusinessUser
 from app.config import settings
 from agents.hotel_agent import HotelAgent
 from sqlalchemy import select, insert
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
+@app.get("/manager-login", response_class=HTMLResponse)
+async def manager_login():
+    with open("app/manager_login.html", "r") as f:
+        return f.read()
+
+@app.get("/manager-dashboard", response_class=HTMLResponse)
+async def manager_dashboard():
+    with open("app/manager_dashboard.html", "r") as f:
+        return f.read()
 
 # Initialize AI agent
 hotel_agent = HotelAgent()
@@ -396,3 +408,14 @@ async def whatsapp_webhook(request: Request):
     except Exception as e:
         print(f"🔥 Webhook error: {e}")
         return {"status": "error", "detail": str(e)}
+from fastapi.responses import HTMLResponse
+
+@app.get("/manager-login", response_class=HTMLResponse)
+async def manager_login():
+    with open("app/manager_login.html", "r") as f:
+        return f.read()
+
+@app.get("/manager-dashboard", response_class=HTMLResponse)
+async def manager_dashboard():
+    with open("app/manager_dashboard.html", "r") as f:
+        return f.read()

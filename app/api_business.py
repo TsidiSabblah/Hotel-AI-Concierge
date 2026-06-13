@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.security import HTTPBasic, HTTPBasicCredentials, HTTPBearer, HTTPAuthorizationCredentials
 from app.db import AsyncSessionLocal
 from app.db import Business, BusinessUser, BusinessKnowledge
 from sqlalchemy import select
@@ -9,6 +9,17 @@ from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api/business", tags=["business"])
 security = HTTPBasic()
+bearer_security = HTTPBearer()
+
+
+# ============ HELPER FUNCTION ============
+async def get_current_business(credentials: HTTPAuthorizationCredentials = Depends(bearer_security)):
+    """Validate bearer token and return business_id (simplified for now)"""
+    token = credentials.credentials
+    # In production, validate against stored tokens or decode JWT
+    # For now, just return a placeholder
+    # TODO: Implement proper token validation
+    return {"business_id": "from_token", "token": token}
 
 
 # ============ LOGIN ENDPOINT ============
@@ -99,7 +110,33 @@ async def get_business(business_id: str):
         }
 
 
-# ============ BUSINESS KNOWLEDGE ============
+# ============ CONVERSATIONS ============
+@router.get("/{business_id}/conversations")
+async def get_business_conversations(business_id: str, limit: int = 50):
+    """Get recent conversations for a business"""
+    from app.db import Conversation, Guest
+    
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Conversation, Guest)
+            .join(Guest, Conversation.guest_id == Guest.id)
+            .where(Conversation.business_id == business_id)
+            .order_by(Conversation.started_at.desc())
+            .limit(limit)
+        )
+        conversations = []
+        for conv, guest in result:
+            conversations.append({
+                "id": conv.id,
+                "guest_name": guest.name or "Anonymous",
+                "room_number": guest.room_number,
+                "message_count": conv.message_count,
+                "started_at": conv.started_at.isoformat() if conv.started_at else None
+            })
+        return conversations
+
+
+# ============ BUSINESS KNOWLEDGE (FAQ) ============
 @router.get("/{business_id}/knowledge")
 async def get_knowledge(business_id: str):
     """Get all FAQ/knowledge for a business"""
@@ -202,8 +239,12 @@ async def get_business_stats(business_id: str):
             "total_guests": total_guests,
             "business_id": business_id
         }
+
+
+# ============ DEBUG ENDPOINTS ============
 @router.get("/debug-password/{email}")
 async def debug_password(email: str):
+    """Debug endpoint to check stored password (remove in production)"""
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(BusinessUser).where(BusinessUser.email == email)
