@@ -18,6 +18,15 @@ from sqlalchemy import select, insert
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+# ============ FASTAPI APP ============
+app = FastAPI(
+    title="Hotel AI Concierge",
+    description="AI-powered guest experience for Ghana hotels",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+
 @app.get("/manager-login", response_class=HTMLResponse)
 async def manager_login():
     with open("app/manager_login.html", "r") as f:
@@ -154,13 +163,6 @@ async def lifespan(app: FastAPI):
     print("👋 Shutting down...")
 
 
-# ============ FASTAPI APP ============
-app = FastAPI(
-    title="Hotel AI Concierge",
-    description="AI-powered guest experience for Ghana hotels",
-    version="1.0.0",
-    lifespan=lifespan
-)
 
 # Include routers
 app.include_router(business_router)
