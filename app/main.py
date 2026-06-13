@@ -45,7 +45,7 @@ async def seed_businesses():
             id=str(uuid.uuid4()),
             name="Ocean View Apartments",
             type="apartment",
-            whatsapp_number="551146733492",  # No +, no spaces
+            whatsapp_number="551146733493",  # No +, no spaces
             city="Accra"
         )
         session.add_all([biz1, biz2])
