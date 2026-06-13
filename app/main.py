@@ -38,7 +38,7 @@ async def seed_businesses():
             id=str(uuid.uuid4()),
             name="Royal Serenity Hotel",
             type="hotel",
-            whatsapp_number="+55 11 4673-3492",
+            whatsapp_number="551146733492",
             city="Accra"
         )
         biz2 = Business(
