@@ -40,6 +40,7 @@ class Guest(Base):
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     hotel_id = Column(String(36))
+    business_id = Column(String(36))  # ← ADD THIS LINE
     phone_number = Column(String(20), nullable=False)
     name = Column(String(255))
     email = Column(String(255))
@@ -57,6 +58,7 @@ class Conversation(Base):
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     hotel_id = Column(String(36))
+    business_id = Column(String(36))  # ← ADD THIS LINE
     guest_id = Column(String(36))
     channel = Column(String(20))
     started_at = Column(DateTime, default=datetime.utcnow)
@@ -68,6 +70,7 @@ class Message(Base):
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     conversation_id = Column(String(36))
+    business_id = Column(String(36))  # ← ADD THIS LINE
     direction = Column(String(10))
     content = Column(Text, nullable=False)
     intent = Column(String(50))
