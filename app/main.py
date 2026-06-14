@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, HTMLResponse
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
@@ -15,8 +15,10 @@ from app.db import AsyncSessionLocal, Business, BusinessKnowledge, BusinessUser
 from app.config import settings
 from agents.hotel_agent import HotelAgent
 from sqlalchemy import select, insert
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+
+# Initialize AI agent
+hotel_agent = HotelAgent()
+
 
 # ============ SEED FUNCTION ============
 async def seed_businesses():
@@ -122,25 +124,27 @@ async def send_whatsapp_reply(to: str, message: str):
             print(f"❌ Failed: {response.text}")
 
 
-
 # ============ LIFESPAN FUNCTION ============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting Hotel AI Concierge...")
     await init_db()
-
-    # Seed businesses (adds sample data if empty)
     await seed_businesses()
-
     print("✅ Database ready")
     print(f"🤖 AI Agent: {settings.LLM_MODEL}")
     print(f"📱 Server running at http://localhost:8000")
     yield
-    # Shutdown
     print("👋 Shutting down...")
 
 
+# ============ FASTAPI APP ============
+app = FastAPI(
+    title="Hotel AI Concierge",
+    description="AI-powered guest experience for Ghana hotels",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 # Include routers
 app.include_router(business_router)
@@ -158,15 +162,7 @@ app.add_middleware(
 )
 
 
-# ============ FASTAPI APP ============
-app = FastAPI(
-    title="Hotel AI Concierge",
-    description="AI-powered guest experience for Ghana hotels",
-    version="1.0.0",
-    lifespan=lifespan
-)
-
-
+# ============ HTML ROUTES ============
 @app.get("/manager-login", response_class=HTMLResponse)
 async def manager_login():
     with open("app/manager_login.html", "r") as f:
@@ -177,19 +173,12 @@ async def manager_dashboard():
     with open("app/manager_dashboard.html", "r") as f:
         return f.read()
 
-# Initialize AI agent
-hotel_agent = HotelAgent()
-
-
-
-
 
 # ============ REQUEST/RESPONSE MODELS ============
 class ChatRequest(BaseModel):
     message: str
     phone_number: str
     hotel_phone: str
-
 
 class ChatResponse(BaseModel):
     response: str
@@ -208,45 +197,39 @@ async def root():
         "ai_agent": "ready" if settings.GROQ_API_KEY and settings.GROQ_API_KEY != "placeholder_get_from_groq.com" else "needs API key"
     }
 
-
 @app.get("/health")
 async def health():
     return {"status": "healthy", "database": "connected"}
 
 
+# ============ CHAT ENDPOINT ============
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """
-    Process a guest message and return AI response
-    """
     try:
-        # Get hotel by phone number
         hotel = await get_hotel_by_phone(request.hotel_phone)
         if not hotel:
             raise HTTPException(status_code=404, detail="Hotel not found")
-
-        # Get or create guest
+        
         guest = await get_or_create_guest(request.phone_number, hotel.id)
-
-        # Process with AI
+        
         hotel_context = {
             "name": hotel.name,
             "city": hotel.city,
             "id": hotel.id
         }
-
+        
         result = await hotel_agent.process_message(
             message=request.message,
             hotel_context=hotel_context,
             guest_name=guest.name or "Guest"
         )
-
+        
         return ChatResponse(
             response=result.get("response", "Thank you for your message. How else can I assist you?"),
             intent=result.get("intent", "general_question"),
             needs_human=result.get("needs_human", False)
         )
-
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -257,39 +240,32 @@ async def chat(request: ChatRequest):
 # ============ TEST ENDPOINTS ============
 @app.get("/test-simple")
 async def test_simple():
-    """Simple test to verify AI is responding"""
     if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "placeholder_get_from_groq.com":
         return {"status": "error", "message": "GROQ_API_KEY not configured"}
-
+    
     test_message = "What time is breakfast?"
     response = await hotel_agent.simple_chat(test_message)
     return {"status": "ok", "question": test_message, "answer": response}
 
-
 @app.get("/test-ai")
 async def test_ai():
-    """Test endpoint to verify AI is working"""
     if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "placeholder_get_from_groq.com":
         return {"status": "error", "message": "GROQ_API_KEY not configured in .env file"}
-
+    
     test_message = "What time is breakfast?"
     hotel_context = {"name": "Test Hotel Accra", "city": "Accra"}
-
     result = await hotel_agent.process_message(test_message, hotel_context)
     return {"status": "ok", "test_result": result}
 
-
 @app.get("/debug-ai")
 async def debug_ai():
-    """Debug endpoint to see raw AI response"""
     import traceback
-
     if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "placeholder_get_from_groq.com":
         return {"status": "error", "message": "GROQ_API_KEY not configured"}
-
+    
     agent = HotelAgent()
     test_message = "What time is breakfast?"
-
+    
     try:
         response = agent.client.chat.completions.create(
             model=settings.LLM_MODEL,
@@ -297,9 +273,7 @@ async def debug_ai():
             temperature=0.7,
             max_tokens=100
         )
-
         raw_result = response.choices[0].message.content
-
         return {
             "status": "ok",
             "raw_response": raw_result,
@@ -313,7 +287,6 @@ async def debug_ai():
             "error_type": type(e).__name__,
             "traceback": traceback.format_exc()
         }
-
 
 @app.get("/debug-key")
 async def debug_key():
@@ -331,7 +304,6 @@ async def whatsapp_webhook(request: Request):
         body = await request.json()
         print("📨 Full webhook payload received")
 
-        # --- Extract message from Meta Cloud API format ---
         messages = []
         if "messages" in body:
             messages = body["messages"]
@@ -358,15 +330,11 @@ async def whatsapp_webhook(request: Request):
         if not sender or not text:
             return {"status": "ok"}
 
-        # --- Find which business this is for ---
         metadata = body.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("metadata", {})
         business_phone_raw = metadata.get("display_phone_number", "")
-
-        # Clean the phone number to match database format
         business_phone = business_phone_raw.replace(" ", "").replace("-", "").replace("+", "")
 
         async with AsyncSessionLocal() as session:
-            # Try to find business by cleaned number
             result = await session.execute(
                 select(Business).where(Business.whatsapp_number.contains(business_phone))
             )
@@ -378,13 +346,11 @@ async def whatsapp_webhook(request: Request):
                 await send_whatsapp_reply(sender, reply_text)
                 return {"status": "ok"}
 
-            # Load business-specific knowledge (FAQ)
             result = await session.execute(
                 select(BusinessKnowledge).where(BusinessKnowledge.business_id == business.id)
             )
             knowledge_items = result.scalars().all()
 
-            # Build context for AI
             hotel_context = {
                 "name": business.name,
                 "type": business.type,
@@ -398,15 +364,12 @@ async def whatsapp_webhook(request: Request):
         print(f"✅ Processing for business: {business.name}")
         print(f"✅ Message from {sender}: '{text}'")
 
-        # Call AI agent
         result = await hotel_agent.process_message(
             message=text,
             hotel_context=hotel_context,
             guest_name=sender
         )
         reply_text = result.get("response", "How may I assist you?")
-
-        # Send reply
         await send_whatsapp_reply(sender, reply_text)
 
         return {"status": "ok"}
@@ -414,14 +377,3 @@ async def whatsapp_webhook(request: Request):
     except Exception as e:
         print(f"🔥 Webhook error: {e}")
         return {"status": "error", "detail": str(e)}
-from fastapi.responses import HTMLResponse
-
-@app.get("/manager-login", response_class=HTMLResponse)
-async def manager_login():
-    with open("app/manager_login.html", "r") as f:
-        return f.read()
-
-@app.get("/manager-dashboard", response_class=HTMLResponse)
-async def manager_dashboard():
-    with open("app/manager_dashboard.html", "r") as f:
-        return f.read()
