@@ -297,6 +297,17 @@ async def debug_key():
     }
 
 
+@app.get("/super-login", response_class=HTMLResponse)
+async def super_login():
+    with open("app/super_login.html", "r") as f:
+        return f.read()
+
+@app.get("/super-dashboard", response_class=HTMLResponse)
+async def super_dashboard():
+    with open("app/super_dashboard.html", "r") as f:
+        return f.read()
+
+
 # ============ WEBHOOK ENDPOINT ============
 @app.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):

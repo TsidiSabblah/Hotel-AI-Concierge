@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin - AI Concierge</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { background: #1a1a2e; color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 24px; }
+        .logout { background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
+        .stat-card h3 { color: #666; font-size: 14px; margin-bottom: 10px; }
+        .stat-card .number { font-size: 32px; font-weight: bold; color: #1a1a2e; }
+        .section { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .section h2 { margin-bottom: 15px; color: #333; border-bottom: 2px solid #c9a03d; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f0f2f5; font-weight: bold; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .badge-hotel { background: #4CAF50; color: white; }
+        .badge-hospital { background: #2196F3; color: white; }
+        .badge-school { background: #FF9800; color: white; }
+        .badge-church { background: #9C27B0; color: white; }
+        .badge-event { background: #f44336; color: white; }
+        .badge-corporate { background: #607D8B; color: white; }
+        button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; margin: 2px; }
+        .edit-btn { background: #2196F3; color: white; }
+        .delete-btn { background: #f44336; color: white; }
+        .add-btn { background: #4CAF50; color: white; padding: 10px 20px; margin-bottom: 15px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 10px; width: 500px; max-width: 90%; }
+        .modal-content input, .modal-content select, .modal-content textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+        .loading { text-align: center; padding: 50px; color: #666; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; background: #ddd; border: none; border-radius: 5px; cursor: pointer; }
+        .tab.active { background: #c9a03d; color: white; }
+        .search-box { padding: 10px; margin-bottom: 15px; width: 300px; border: 1px solid #ddd; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>🏢 AI Concierge - Super Admin</h1>
+                <p style="font-size: 14px; margin-top: 5px;">Manage all businesses (Hotels, Hospitals, Schools, Churches, Events)</p>
+            </div>
+            <div>
+                <span id="adminName" style="margin-right: 15px;">Admin</span>
+                <button class="logout" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('businesses')">🏢 Businesses</button>
+            <button class="tab" onclick="showTab('users')">👥 Business Users</button>
+            <button class="tab" onclick="showTab('stats')">📊 All Stats</button>
+        </div>
+
+        <div id="businesses-tab">
+            <div class="section">
+                <h2>All Businesses 
+                    <button class="add-btn" onclick="openAddBusinessModal()" style="float:right; margin-top:-5px;">+ New Business</button>
+                </h2>
+                <input type="text" id="searchBusiness" class="search-box" placeholder="Search by name or type..." onkeyup="filterBusinesses()">
+                <div id="businesses-list">Loading...</div>
+            </div>
+        </div>
+
+        <div id="users-tab" style="display:none;">
+            <div class="section">
+                <h2>Business Users
+                    <button class="add-btn" onclick="openAddUserModal()" style="float:right; margin-top:-5px;">+ New User</button>
+                </h2>
+                <div id="users-list">Loading...</div>
+            </div>
+        </div>
+
+        <div id="stats-tab" style="display:none;">
+            <div class="section">
+                <h2>All Business Statistics</h2>
+                <div id="all-stats">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Business Modal -->
+    <div id="addBusinessModal" class="modal">
+        <div class="modal-content">
+            <h3>Add New Business</h3>
+            <input type="text" id="businessName" placeholder="Business Name">
+            <select id="businessType">
+                <option value="hotel">🏨 Hotel</option>
+                <option value="hospital">🏥 Hospital</option>
+                <option value="school">🎓 School</option>
+                <option value="church">⛪ Church</option>
+                <option value="event">🎉 Event</option>
+                <option value="corporate">🏢 Corporate</option>
+            </select>
+            <input type="text" id="businessPhone" placeholder="WhatsApp Number (e.g., 551146733492)">
+            <input type="text" id="businessCity" placeholder="City">
+            <button onclick="addBusiness()" class="add-btn">Create</button>
+            <button onclick="closeModal('addBusinessModal')" style="background:#999;color:white;padding:8px 15px;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div id="addUserModal" class="modal">
+        <div class="modal-content">
+            <h3>Add Business User</h3>
+            <select id="userBusinessId"></select>
+            <input type="text" id="userEmail" placeholder="Email">
+            <input type="text" id="userName" placeholder="Full Name">
+            <input type="password" id="userPassword" placeholder="Password" value="hotel123">
+            <select id="userRole">
+                <option value="manager">Manager</option>
+                <option value="owner">Owner</option>
+                <option value="staff">Staff</option>
+            </select>
+            <button onclick="addUser()" class="add-btn">Create User</button>
+            <button onclick="closeModal('addUserModal')" style="background:#999;color:white;padding:8px 15px;">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        let authToken = localStorage.getItem('super_admin_token');
+        let allBusinesses = [];
+
+        if (!authToken) {
+            window.location.href = '/super-login';
+        }
+
+        function showTab(tabName) {
+            document.getElementById('businesses-tab').style.display = tabName === 'businesses' ? 'block' : 'none';
+            document.getElementById('users-tab').style.display = tabName === 'users' ? 'block' : 'none';
+            document.getElementById('stats-tab').style.display = tabName === 'stats' ? 'block' : 'none';
+            
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            if (tabName === 'businesses') document.querySelector('.tab:first-child').classList.add('active');
+            if (tabName === 'users') document.querySelectorAll('.tab')[1].classList.add('active');
+            if (tabName === 'stats') document.querySelectorAll('.tab')[2].classList.add('active');
+            
+            if (tabName === 'businesses') loadBusinesses();
+            if (tabName === 'users') loadUsers();
+            if (tabName === 'stats') loadAllStats();
+        }
+
+        async function loadBusinesses() {
+            const container = document.getElementById('businesses-list');
+            container.innerHTML = '<div class="loading">Loading...</div>';
+            
+            const res = await fetch('/api/business/', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            allBusinesses = await res.json();
+            displayBusinesses(allBusinesses);
+        }
+
+        function displayBusinesses(businesses) {
+            const container = document.getElementById('businesses-list');
+            if (businesses.length === 0) {
+                container.innerHTML = '<p>No businesses found.</p>';
+                return;
+            }
+            
+            let html = '<table><thead><tr><th>Name</th><th>Type</th><th>WhatsApp</th><th>City</th><th>Actions</th></tr></thead><tbody>';
+            businesses.forEach(b => {
+                html += `<tr>
+                    <td>${b.name}</td>
+                    <td><span class="badge badge-${b.type}">${b.type}</span></td>
+                    <td>${b.whatsapp_number}</td>
+                    <td>${b.city || '-'}</td>
+                    <td>
+                        <button class="edit-btn" onclick="editBusiness('${b.id}')">Edit</button>
+                        <button class="delete-btn" onclick="deleteBusiness('${b.id}')">Delete</button>
+                    </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function filterBusinesses() {
+            const search = document.getElementById('searchBusiness').value.toLowerCase();
+            const filtered = allBusinesses.filter(b => 
+                b.name.toLowerCase().includes(search) || b.type.toLowerCase().includes(search)
+            );
+            displayBusinesses(filtered);
+        }
+
+        async function deleteBusiness(id) {
+            if (confirm('Delete this business? All related data will be lost.')) {
+                await fetch(`/api/business/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${authToken}` } });
+                loadBusinesses();
+            }
+        }
+
+        async function loadUsers() {
+            const container = document.getElementById('users-list');
+            container.innerHTML = '<div class="loading">Loading...</div>';
+            
+            const res = await fetch('/api/business/users', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const users = await res.json();
+            
+            if (users.length === 0) {
+                container.innerHTML = '<p>No users found.</p>';
+                return;
+            }
+            
+            let html = '<table><thead><tr><th>Name</th><th>Email</th><th>Business</th><th>Role</th><th>Actions</th></tr></thead><tbody>';
+            users.forEach(u => {
+                html += `<tr>
+                    <td>${u.name}</td>
+                    <td>${u.email}</td>
+                    <td>${u.business_name || '-'}</td>
+                    <td>${u.role}</td>
+                    <td><button class="delete-btn" onclick="deleteUser('${u.id}')">Delete</button></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        async function loadAllStats() {
+            const container = document.getElementById('all-stats');
+            container.innerHTML = '<div class="loading">Loading...</div>';
+            
+            const businessesRes = await fetch('/api/business/', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const businesses = await businessesRes.json();
+            
+            let html = '<table><thead><tr><th>Business</th><th>Type</th><th>Weekly Messages</th><th>Total Guests</th></tr></thead><tbody>';
+            
+            for (const b of businesses) {
+                try {
+                    const statsRes = await fetch(`/api/business/${b.id}/stats`, {
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+                    const stats = await statsRes.json();
+                    html += `<tr>
+                        <td>${b.name}</td>
+                        <td><span class="badge badge-${b.type}">${b.type}</span></td>
+                        <td>${stats.weekly_messages || 0}</td>
+                        <td>${stats.total_guests || 0}</td>
+                    </tr>`;
+                } catch(e) {
+                    html += `<tr><td>${b.name}</td><td>${b.type}</td><td colspan="2">Error loading stats</td></tr>`;
+                }
+            }
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function openAddBusinessModal() { document.getElementById('addBusinessModal').style.display = 'flex'; }
+        function openAddUserModal() { 
+            loadBusinessesForSelect();
+            document.getElementById('addUserModal').style.display = 'flex'; 
+        }
+        async function loadBusinessesForSelect() {
+            const res = await fetch('/api/business/', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const businesses = await res.json();
+            const select = document.getElementById('userBusinessId');
+            select.innerHTML = businesses.map(b => `<option value="${b.id}">${b.name} (${b.type})</option>`).join('');
+        }
+        async function addBusiness() {
+            const data = {
+                name: document.getElementById('businessName').value,
+                type: document.getElementById('businessType').value,
+                whatsapp_number: document.getElementById('businessPhone').value,
+                city: document.getElementById('businessCity').value
+            };
+            await fetch('/api/business/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(data) });
+            closeModal('addBusinessModal');
+            loadBusinesses();
+        }
+        async function addUser() {
+            const data = {
+                business_id: document.getElementById('userBusinessId').value,
+                email: document.getElementById('userEmail').value,
+                name: document.getElementById('userName').value,
+                password: document.getElementById('userPassword').value,
+                role: document.getElementById('userRole').value
+            };
+            await fetch('/api/business/users', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(data) });
+            closeModal('addUserModal');
+            loadUsers();
+        }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+        function logout() { localStorage.clear(); window.location.href = '/super-login'; }
+        
+        showTab('businesses');
+    </script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin Login</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); height: 100vh; display: flex; justify-content: center; align-items: center; margin: 0; }
+        .login-container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 350px; text-align: center; }
+        .login-container h1 { color: #333; margin-bottom: 10px; }
+        .login-container p { color: #666; margin-bottom: 30px; }
+        .login-container input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
+        .login-container button { width: 100%; padding: 12px; background: #1a1a2e; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+        .login-container button:hover { background: #16213e; }
+        .error { color: red; margin-top: 15px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>🏢 Super Admin</h1>
+        <p>AI Concierge Management</p>
+        <input type="text" id="username" placeholder="Username" value="superadmin">
+        <input type="password" id="password" placeholder="Password" value="admin123">
+        <button onclick="login()">Login</button>
+        <div id="error" class="error"></div>
+    </div>
+
+    <script>
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            // Hardcoded super admin check (you can move to backend)
+            if (username === 'superadmin' && password === 'admin123') {
+                localStorage.setItem('super_admin_token', 'super-token-123');
+                window.location.href = '/super-dashboard';
+            } else {
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').innerText = 'Invalid credentials';
+            }
+        }
+    </script>
+</body>
+</html>
