@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel AI Concierge - Manager Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: #c9a03d; color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
+        .stat-card h3 { color: #666; font-size: 14px; margin-bottom: 10px; }
+        .stat-card .number { font-size: 32px; font-weight: bold; color: #c9a03d; }
+        .section { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .section h2 { margin-bottom: 15px; color: #333; border-bottom: 2px solid #c9a03d; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f0f0f0; font-weight: bold; }
+        .knowledge-item { background: #f9f9f9; padding: 15px; margin-bottom: 10px; border-radius: 8px; }
+        .knowledge-question { font-weight: bold; color: #333; }
+        .knowledge-answer { color: #666; margin-top: 5px; }
+        .edit-btn, .delete-btn, .add-btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        .edit-btn { background: #2196F3; color: white; }
+        .delete-btn { background: #f44336; color: white; }
+        .add-btn { background: #4CAF50; color: white; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 10px; width: 500px; max-width: 90%; }
+        .modal-content input, .modal-content textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+        .modal-content button { margin-top: 10px; }
+        .logout { float: right; background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
+        .business-name { float: right; margin-right: 15px; color: white; padding: 8px 0; }
+        .loading { text-align: center; padding: 50px; color: #666; }
+        .error { color: red; text-align: center; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏨 Hotel AI Concierge</h1>
+            <span class="business-name" id="businessName"></span>
+            <button class="logout" onclick="logout()">Logout</button>
+        </div>
+
+        <div id="dashboard-content">
+            <div class="loading">Loading dashboard...</div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <h3>Edit FAQ</h3>
+            <input type="text" id="editQuestion" placeholder="Question">
+            <textarea id="editAnswer" rows="4" placeholder="Answer"></textarea>
+            <input type="text" id="editCategory" placeholder="Category (e.g., breakfast, wifi)">
+            <button onclick="saveEdit()" class="add-btn">Save</button>
+            <button onclick="closeModal()" style="background:#999;color:white;padding:8px 15px;border:none;border-radius:5px;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Add Modal -->
+    <div id="addModal" class="modal">
+        <div class="modal-content">
+            <h3>Add New FAQ</h3>
+            <input type="text" id="addQuestion" placeholder="Question">
+            <textarea id="addAnswer" rows="4" placeholder="Answer"></textarea>
+            <input type="text" id="addCategory" placeholder="Category (e.g., breakfast, wifi)">
+            <button onclick="saveNew()" class="add-btn">Add</button>
+            <button onclick="closeAddModal()" style="background:#999;color:white;padding:8px 15px;border:none;border-radius:5px;">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        let authToken = localStorage.getItem('access_token');
+        let businessId = localStorage.getItem('business_id');
+        let businessName = localStorage.getItem('business_name');
+
+        // Check login
+        if (!authToken) {
+            window.location.href = '/manager-login';
+        }
+
+        document.getElementById('businessName').innerText = businessName || 'Loading...';
+
+        // Load dashboard data
+        async function loadDashboard() {
+            const container = document.getElementById('dashboard-content');
+            container.innerHTML = '<div class="loading">Loading dashboard...</div>';
+
+            try {
+                // Load statistics
+                const statsRes = await fetch(`/api/business/${businessId}/stats`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const stats = await statsRes.json();
+
+                // Load knowledge/FAQ
+                const knowledgeRes = await fetch(`/api/business/${businessId}/knowledge`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const knowledge = await knowledgeRes.json();
+
+                // Load conversations (recent 10)
+                const convRes = await fetch(`/api/business/${businessId}/conversations?limit=10`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const conversations = await convRes.json();
+
+                // Render dashboard
+                container.innerHTML = `
+                    <div class="stats">
+                        <div class="stat-card">
+                            <h3>Weekly Messages</h3>
+                            <div class="number">${stats.weekly_messages || 0}</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Total Guests</h3>
+                            <div class="number">${stats.total_guests || 0}</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>FAQ Entries</h3>
+                            <div class="number">${knowledge.length}</div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <h2>📚 Frequently Asked Questions 
+                            <button class="add-btn" onclick="openAddModal()" style="float:right; margin-top:-5px;">+ Add FAQ</button>
+                        </h2>
+                        <div id="knowledge-list">
+                            ${knowledge.map(k => `
+                                <div class="knowledge-item" data-id="${k.id}">
+                                    <div class="knowledge-question">❓ ${escapeHtml(k.question)}</div>
+                                    <div class="knowledge-answer">📝 ${escapeHtml(k.answer)}</div>
+                                    <div style="margin-top:10px;">
+                                        <button class="edit-btn" onclick="editKnowledge('${k.id}', '${escapeHtml(k.question)}', '${escapeHtml(k.answer)}', '${k.category || ''}')">Edit</button>
+                                        <button class="delete-btn" onclick="deleteKnowledge('${k.id}')">Delete</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                            ${knowledge.length === 0 ? '<p>No FAQ entries yet. Click "Add FAQ" to create one.</p>' : ''}
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <h2>💬 Recent Conversations</h2>
+                        <div style="overflow-x: auto;">
+                            <table>
+                                <thead>
+                                    <tr><th>Guest</th><th>Room</th><th>Messages</th><th>Started</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${conversations.map(c => `
+                                        <tr>
+                                            <td>${escapeHtml(c.guest_name || 'Guest')}</td>
+                                            <td>${c.room_number || '-'}</td>
+                                            <td>${c.message_count || 0}</td>
+                                            <td>${new Date(c.started_at).toLocaleString()}</td>
+                                        </tr>
+                                    `).join('')}
+                                    ${conversations.length === 0 ? '<tr><td colspan="4">No conversations yet</td></tr>' : ''}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {
+                container.innerHTML = `<div class="error">Error loading dashboard: ${err.message}</div>`;
+            }
+        }
+
+        function escapeHtml(str) { return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+
+        // FAQ CRUD
+        let currentEditId = null;
+        function editKnowledge(id, question, answer, category) {
+            currentEditId = id;
+            document.getElementById('editQuestion').value = question;
+            document.getElementById('editAnswer').value = answer;
+            document.getElementById('editCategory').value = category;
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        async function saveEdit() {
+            const question = document.getElementById('editQuestion').value;
+            const answer = document.getElementById('editAnswer').value;
+            const category = document.getElementById('editCategory').value;
+            await fetch(`/api/business/${businessId}/knowledge/${currentEditId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify({ question, answer, category })
+            });
+            closeModal();
+            loadDashboard();
+        }
+
+        async function deleteKnowledge(id) {
+            if (confirm('Delete this FAQ?')) {
+                await fetch(`/api/business/${businessId}/knowledge/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                loadDashboard();
+            }
+        }
+
+        function openAddModal() {
+            document.getElementById('addModal').style.display = 'flex';
+        }
+
+        async function saveNew() {
+            const question = document.getElementById('addQuestion').value;
+            const answer = document.getElementById('addAnswer').value;
+            const category = document.getElementById('addCategory').value;
+            await fetch(`/api/business/${businessId}/knowledge`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify({ question, answer, category })
+            });
+            closeAddModal();
+            loadDashboard();
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').style.display = 'none';
+            currentEditId = null;
+        }
+
+        function closeAddModal() {
+            document.getElementById('addModal').style.display = 'none';
+            document.getElementById('addQuestion').value = '';
+            document.getElementById('addAnswer').value = '';
+            document.getElementById('addCategory').value = '';
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/manager-login';
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

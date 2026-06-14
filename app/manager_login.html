@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel AI Concierge - Manager Login</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100vh; display: flex; justify-content: center; align-items: center; margin: 0; }
+        .login-container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 350px; text-align: center; }
+        .login-container h1 { color: #333; margin-bottom: 30px; }
+        .login-container input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
+        .login-container button { width: 100%; padding: 12px; background: #c9a03d; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+        .login-container button:hover { background: #b88a2a; }
+        .error { color: red; margin-top: 15px; display: none; }
+        .logo { font-size: 48px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">🏨</div>
+        <h1>Hotel AI Concierge</h1>
+        <p style="color:#666; margin-bottom:20px;">Manager Login</p>
+        <input type="email" id="email" placeholder="Email" value="manager@royalserenity.com">
+        <input type="password" id="password" placeholder="Password" value="hotel123">
+        <button onclick="login()">Login</button>
+        <div id="error" class="error"></div>
+    </div>
+
+    <script>
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('error');
+            
+            try {
+                const response = await fetch('/api/business/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: email, password: password })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    localStorage.setItem('access_token', data.access_token);
+                    localStorage.setItem('business_id', data.business_id);
+                    localStorage.setItem('business_name', data.name);
+                    window.location.href = '/manager-dashboard';
+                } else {
+                    errorDiv.style.display = 'block';
+                    errorDiv.innerText = 'Invalid email or password';
+                }
+            } catch (err) {
+                errorDiv.style.display = 'block';
+                errorDiv.innerText = 'Connection error. Please try again.';
+            }
+        }
+    </script>
+</body>
+</html>
